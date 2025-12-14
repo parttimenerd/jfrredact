@@ -566,18 +566,12 @@ general:
 #
 # Test without creating output:
 #   java -jar jfr-redact.jar input.jfr output.jfr --config my-config.yaml --dry-run --verbose```
+```
+</details>
 
-The schema generation is:
-- **Automatic in CI**: Generated during package phase in GitHub Actions CI/CD
-- **Optional locally**: Use the `generate-schema` profile only when you modify the config classes
-- **Not run during tests**: Keeps test output clean and test phase fast
+### Development
 
-The generated schema is committed to the repository and used by:
-- IDE configuration file editors (VS Code, IntelliJ, etc.)
-- Tools that validate YAML configuration files
-- Documentation and schema registry services
-
-### Documentation Sync
+## Documentation Sync
 
 The project uses `sync-documentation.py` to keep documentation in sync:
 - Extracts version from `Version.java` as the single source of truth
