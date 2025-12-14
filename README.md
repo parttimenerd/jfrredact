@@ -565,23 +565,7 @@ general:
 #   java -jar jfr-redact.jar input.jfr output.jfr --pseudonymize --pseudonym-format hash
 #
 # Test without creating output:
-#   java -jar jfr-redact.jar input.jfr output.jfr --config my-config.yaml --dry-run --verbose```
-</details>
-
-### Development
-
-## Documentation Sync
-
-The project uses `sync-documentation.py` to keep documentation in sync:
-- Extracts version from `Version.java` as the single source of truth
-- Updates `pom.xml` with the current version
-- Updates README.md with:
-  - Maven/Gradle dependency versions
-  - Configuration examples from YAML files
-  - CLI help output
-
-To manually sync documentation:
-```bash
+#   java -jar jfr-redact.jar input.jfr output.jfr --config my-config.yaml --dry-run --verbose```bash
 ./sync-documentation.py
 ```
 

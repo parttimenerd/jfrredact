@@ -69,6 +69,10 @@
                 <version>3.13.0</version>
                 <configuration>
                     <release>21</release>
+                    <compilerArgs>
+                        <arg>--add-modules</arg>
+                        <arg>jdk.jfr</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>
@@ -139,11 +143,13 @@
                 <configuration>
                     <doclint>none</doclint>
                     <quiet>true</quiet>
-                    <source>21</source>
-                    <additionalOptions>
-                        <additionalOption>--add-modules</additionalOption>
-                        <additionalOption>jdk.jfr</additionalOption>
-                    </additionalOptions>
+                    <release>21</release>
+                    <additionalJOptions>
+                        <additionalJOption>--add-modules</additionalJOption>
+                        <additionalJOption>jdk.jfr</additionalJOption>
+                        <additionalJOption>--add-reads</additionalJOption>
+                        <additionalJOption>com.fasterxml.jackson.annotation=jdk.jfr</additionalJOption>
+                    </additionalJOptions>
                 </configuration>
             </plugin>
 
