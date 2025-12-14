@@ -128,14 +128,62 @@ public class StringConfig {
      * IP address pattern configuration
      */
     public static class IpAddressesConfig {
+        // IPv6 hex group pattern: 1-4 hexadecimal digits
+        private static final String H = "[0-9a-fA-F]{1,4}";
+
         @JsonProperty("enabled")
         private boolean enabled = true;
 
         @JsonProperty("ipv4")
         private String ipv4 = "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b";
 
+        /**
+         * IPv6 address regex pattern with full RFC 4291 support.
+         *
+         * <p>Supports all valid IPv6 formats including:
+         * <ul>
+         *   <li><b>Full format:</b> {@code 2001:0db8:85a3:0000:0000:8a2e:0370:7334}</li>
+         *   <li><b>Compressed zeros:</b> {@code 2001:db8:85a3::8a2e:370:7334}</li>
+         *   <li><b>Leading compression:</b> {@code ::8a2e:370:7334}</li>
+         *   <li><b>Trailing compression:</b> {@code 2001:db8::}</li>
+         *   <li><b>Loopback:</b> {@code ::1}</li>
+         *   <li><b>Unspecified:</b> {@code ::}</li>
+         *   <li><b>Link-local:</b> {@code fe80::1}</li>
+         * </ul>
+         *
+         * <p>The regex handles the double-colon (::) notation which represents one or more
+         * consecutive groups of zeros. This notation can appear at most once in an address.
+         *
+         * <p>Pattern breakdown:
+         * <ul>
+         *   <li>{@code (H:){7}H} - Full format with 8 groups</li>
+         *   <li>{@code (H:){1,7}:} - 1-7 groups followed by ::</li>
+         *   <li>{@code (H:){1,6}:H} - 1-6 groups, ::, then 1 group</li>
+         *   <li>{@code (H:){1,5}(:H){1,2}} - Various compressed formats</li>
+         *   <li>{@code :(((:H){1,7})|:)} - Leading :: formats</li>
+         * </ul>
+         * where H = [0-9a-fA-F]{1,4} (one to four hex digits)
+         */
         @JsonProperty("ipv6")
-        private String ipv6 = "\\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\\b";
+        private String ipv6 = buildIpv6Regex();
+
+        private static String buildIpv6Regex() {
+            // Use negative lookahead/lookbehind to ensure we don't match partial addresses
+            // that are part of a longer hex string
+            String boundary = "(?![0-9a-fA-F:])";
+
+            return "(?:" +
+                "(?:" + H + ":){7}" + H + boundary + "|" +              // Full format: 1:2:3:4:5:6:7:8
+                "(?:" + H + ":){1,7}:" + boundary + "|" +                // Trailing :: - 1:2:3:4:5:6:7::
+                "(?:" + H + ":){1,6}:" + H + boundary + "|" +            // Mid compression - 1::8
+                "(?:" + H + ":){1,5}(?::" + H + "){1,2}" + boundary + "|" +   // 1::7:8, 1:2::7:8, etc.
+                "(?:" + H + ":){1,4}(?::" + H + "){1,3}" + boundary + "|" +   // 1::6:7:8, 1:2::6:7:8, etc.
+                "(?:" + H + ":){1,3}(?::" + H + "){1,4}" + boundary + "|" +   // 1::5:6:7:8, etc.
+                "(?:" + H + ":){1,2}(?::" + H + "){1,5}" + boundary + "|" +   // 1::4:5:6:7:8, etc.
+                H + ":(?:(?::" + H + "){1,6})" + boundary + "|" +             // 1::3:4:5:6:7:8
+                ":(?:(?::" + H + "){1,7}|:)" + boundary +                      // ::2:3:4:5:6:7:8, ::1, ::
+            ")";
+        }
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }

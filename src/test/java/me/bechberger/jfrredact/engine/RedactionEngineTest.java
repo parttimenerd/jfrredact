@@ -162,8 +162,15 @@ public class RedactionEngineTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-        "2001:0db8:85a3:0000:0000:8a2e:0370:7334"  // Full format only for now
-        // TODO: Fix IPv6 regex to support compressed format like 2001:db8::8a2e:370:7334
+        "2001:0db8:85a3:0000:0000:8a2e:0370:7334",  // Full format
+        "2001:db8:85a3::8a2e:370:7334",             // Compressed format
+        "2001:db8::8a2e:370:7334",                  // Compressed with more zeros
+        "::1",                                       // IPv6 loopback
+        "::",                                        // IPv6 unspecified address
+        "fe80::1",                                   // Link-local
+        "::ffff:192.0.2.1",                         // IPv4-mapped IPv6 (IPv6 part only)
+        "2001:db8::",                               // Compressed trailing zeros
+        "::8a2e:370:7334"                           // Compressed leading zeros
     })
     public void testIPv6AddressesAreRedacted(String ip) {
         RedactionEngine engine = createDefaultEngine();
@@ -714,5 +721,186 @@ public class RedactionEngineTest {
         // Should do partial redaction since we're only using string patterns
         assertRedacted(input, result);
         assertEquals("My email is *** and that's it", result, "Email should be redacted in place");
+    }
+
+    // ========== Custom Regex Pattern Tests ==========
+
+    @Test
+    public void testCustomRegexPatternsFromCli() {
+        RedactionConfig config = new RedactionConfig();
+
+        // Simulate CLI options with custom regex patterns
+        RedactionConfig.CliOptions cliOptions = new RedactionConfig.CliOptions();
+        cliOptions.getRedactionRegexes().add("\\b[A-Z]{3}-\\d{6}\\b");  // Ticket ID pattern
+
+        config.applyCliOptions(cliOptions);
+        RedactionEngine engine = new RedactionEngine(config);
+
+        // Test that custom pattern is applied
+        String text = "See ticket ABC-123456 for details";
+        String result = engine.redact("description", text);
+
+        assertRedacted(text, result);
+        assertEquals("See ticket *** for details", result);
+    }
+
+    @Test
+    public void testMultipleCustomRegexPatterns() {
+        RedactionConfig config = new RedactionConfig();
+
+        RedactionConfig.CliOptions cliOptions = new RedactionConfig.CliOptions();
+        cliOptions.getRedactionRegexes().add("\\b[A-Z]{3}-\\d{6}\\b");      // Ticket ID
+        cliOptions.getRedactionRegexes().add("AKIA[0-9A-Z]{16}");            // AWS access key
+        cliOptions.getRedactionRegexes().add("ghp_[a-zA-Z0-9]{36}");         // GitHub token
+
+        config.applyCliOptions(cliOptions);
+        RedactionEngine engine = new RedactionEngine(config);
+
+        // Test ticket ID pattern
+        String ticket = "Bug report ABC-123456";
+        assertEquals("Bug report ***", engine.redact("text", ticket));
+
+        // Test AWS key pattern
+        String awsKey = "Key: AKIAIOSFODNN7EXAMPLE";
+        assertEquals("Key: ***", engine.redact("text", awsKey));
+
+        // Test GitHub token pattern
+        String ghToken = "Token: ghp_1234567890abcdefghijklmnopqrstuvwxyz";
+        assertEquals("Token: ***", engine.redact("text", ghToken));
+    }
+
+    @Test
+    public void testCustomRegexWithPseudonymization() {
+        RedactionConfig config = new RedactionConfig();
+        config.getGeneral().getPseudonymization().setEnabled(true);
+        config.getGeneral().getPseudonymization().setMode("counter");
+
+        RedactionConfig.CliOptions cliOptions = new RedactionConfig.CliOptions();
+        cliOptions.getRedactionRegexes().add("\\b[A-Z]{3}-\\d{6}\\b");
+        cliOptions.setPseudonymize(true);
+
+        config.applyCliOptions(cliOptions);
+        RedactionEngine engine = new RedactionEngine(config);
+
+        // Same ticket ID should produce same pseudonym
+        String text1 = "Ticket ABC-123456 was closed";
+        String text2 = "Reopened ABC-123456";
+
+        String result1 = engine.redact("text", text1);
+        String result2 = engine.redact("text", text2);
+
+        assertRedacted(text1, result1);
+        assertRedacted(text2, result2);
+
+        // Extract the pseudonym from both results
+        assertTrue(result1.contains("<redacted:"));
+        assertTrue(result2.contains("<redacted:"));
+
+        // Both should contain the same pseudonym for ABC-123456
+        String pseudonym1 = result1.substring(result1.indexOf("<redacted:"), result1.indexOf(">") + 1);
+        String pseudonym2 = result2.substring(result2.indexOf("<redacted:"), result2.indexOf(">") + 1);
+        assertEquals(pseudonym1, pseudonym2, "Same ticket ID should produce same pseudonym");
+    }
+
+    @Test
+    public void testCustomRegexDoesNotAffectOtherPatterns() {
+        RedactionConfig config = new RedactionConfig();
+
+        RedactionConfig.CliOptions cliOptions = new RedactionConfig.CliOptions();
+        cliOptions.getRedactionRegexes().add("\\b[A-Z]{3}-\\d{6}\\b");
+
+        config.applyCliOptions(cliOptions);
+        RedactionEngine engine = new RedactionEngine(config);
+
+        // Custom pattern should work
+        assertEquals("Bug ***", engine.redact("text", "Bug ABC-123456"));
+
+        // Built-in patterns should still work
+        String emailText = "Contact user@example.com";
+        String emailResult = engine.redact("text", emailText);
+        assertRedacted(emailText, emailResult);
+
+        String ipText = "Server at 192.168.1.1";
+        String ipResult = engine.redact("text", ipText);
+        assertRedacted(ipText, ipResult);
+
+        // Property patterns should still work
+        assertEquals("***", engine.redact("password", "secret123"));
+    }
+
+    @Test
+    public void testCustomRegexWithMultipleMatches() {
+        RedactionConfig config = new RedactionConfig();
+
+        RedactionConfig.CliOptions cliOptions = new RedactionConfig.CliOptions();
+        cliOptions.getRedactionRegexes().add("\\b[A-Z]{3}-\\d{6}\\b");
+
+        config.applyCliOptions(cliOptions);
+        RedactionEngine engine = new RedactionEngine(config);
+
+        // Multiple matches in same string
+        String text = "Tickets ABC-123456 and DEF-789012 are related";
+        String result = engine.redact("text", text);
+
+        assertRedacted(text, result);
+        assertEquals("Tickets *** and *** are related", result);
+    }
+
+    // ========== IPv6 Format Tests ==========
+
+    @Test
+    public void testIPv6InContextWithCompressedFormat() {
+        RedactionEngine engine = createDefaultEngine();
+
+        // Test compressed IPv6 in various contexts
+        String text1 = "Server at 2001:db8::8a2e:370:7334 is down";
+        String result1 = engine.redact("message", text1);
+        assertRedacted(text1, result1);
+        assertEquals("Server at *** is down", result1);
+
+        // Test with loopback
+        String text2 = "Connecting to ::1 on port 8080";
+        String result2 = engine.redact("log", text2);
+        assertRedacted(text2, result2);
+        assertEquals("Connecting to *** on port 8080", result2);
+
+        // Test with link-local
+        String text3 = "Interface fe80::1 active";
+        String result3 = engine.redact("status", text3);
+        assertRedacted(text3, result3);
+        assertEquals("Interface *** active", result3);
+    }
+
+    @Test
+    public void testIPv6WithPseudonymization() {
+        RedactionEngine engine = createEngineWithMode("counter");
+
+        // Same IPv6 should get same pseudonym
+        String text1 = "Host 2001:db8::1 responded";
+        String text2 = "Connecting to 2001:db8::1";
+
+        String result1 = engine.redact("message", text1);
+        String result2 = engine.redact("message", text2);
+
+        // Both should contain the same redacted value for the same IP
+        assertTrue(result1.contains("<redacted:"));
+        assertTrue(result2.contains("<redacted:"));
+
+        // Extract and compare pseudonyms
+        String pseudonym1 = result1.substring(result1.indexOf("<redacted:"), result1.indexOf(">", result1.indexOf("<redacted:")) + 1);
+        String pseudonym2 = result2.substring(result2.indexOf("<redacted:"), result2.indexOf(">", result2.indexOf("<redacted:")) + 1);
+
+        assertEquals(pseudonym1, pseudonym2, "Same IPv6 should produce same pseudonym");
+    }
+
+    @Test
+    public void testIPv6AndIPv4Together() {
+        RedactionEngine engine = createDefaultEngine();
+
+        String text = "Dual stack: IPv4 192.168.1.1 and IPv6 2001:db8::1";
+        String result = engine.redact("config", text);
+
+        assertRedacted(text, result);
+        assertEquals("Dual stack: IPv4 *** and IPv6 ***", result);
     }
 }

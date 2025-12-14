@@ -160,7 +160,15 @@ public class RedactionConfig {
         }
 
         // Add additional redaction regexes
-        // TODO: Implement custom regex patterns in StringConfig
+        if (cliOptions.getRedactionRegexes() != null && !cliOptions.getRedactionRegexes().isEmpty()) {
+            List<StringConfig.CustomPatternConfig> customPatterns = strings.getPatterns().getCustom();
+            for (String regex : cliOptions.getRedactionRegexes()) {
+                StringConfig.CustomPatternConfig customPattern = new StringConfig.CustomPatternConfig();
+                customPattern.setName("cli_pattern_" + customPatterns.size());
+                customPattern.setRegex(regex);
+                customPatterns.add(customPattern);
+            }
+        }
     }
 
     /**

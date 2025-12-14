@@ -138,4 +138,58 @@ public class StringConfigTest {
         assertNotNull(config.getStrings().getPatterns());
         assertNotNull(config.getStrings().getPatterns().getSshHosts());
     }
+
+    @Test
+    public void testCliCustomRegexPatterns() throws IOException {
+        ConfigLoader loader = new ConfigLoader();
+        RedactionConfig config = loader.load("default");
+
+        // Simulate CLI options with custom regex patterns
+        RedactionConfig.CliOptions cliOptions = new RedactionConfig.CliOptions();
+        cliOptions.getRedactionRegexes().add("\\b[A-Z]{3}-\\d{6}\\b");  // Ticket ID pattern
+        cliOptions.getRedactionRegexes().add("AKIA[0-9A-Z]{16}");       // AWS access key pattern
+
+        // Apply CLI options
+        config.applyCliOptions(cliOptions);
+
+        // Verify custom patterns were added
+        var customPatterns = config.getStrings().getPatterns().getCustom();
+        assertEquals(2, customPatterns.size());
+
+        assertEquals("cli_pattern_0", customPatterns.get(0).getName());
+        assertEquals("\\b[A-Z]{3}-\\d{6}\\b", customPatterns.get(0).getRegex());
+
+        assertEquals("cli_pattern_1", customPatterns.get(1).getName());
+        assertEquals("AKIA[0-9A-Z]{16}", customPatterns.get(1).getRegex());
+    }
+
+    @Test
+    public void testCliCustomRegexPatternsWithExistingCustomPatterns() throws IOException {
+        ConfigLoader loader = new ConfigLoader();
+        RedactionConfig config = loader.load("default");
+
+        // Add a custom pattern via config
+        StringConfig.CustomPatternConfig existingPattern = new StringConfig.CustomPatternConfig();
+        existingPattern.setName("jwt_tokens");
+        existingPattern.setRegex("eyJ[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+");
+        config.getStrings().getPatterns().getCustom().add(existingPattern);
+
+        // Now add CLI patterns
+        RedactionConfig.CliOptions cliOptions = new RedactionConfig.CliOptions();
+        cliOptions.getRedactionRegexes().add("\\b[A-Z]{3}-\\d{6}\\b");
+
+        config.applyCliOptions(cliOptions);
+
+        // Verify both existing and CLI patterns are present
+        var customPatterns = config.getStrings().getPatterns().getCustom();
+        assertEquals(2, customPatterns.size());
+
+        // Existing pattern still there
+        assertEquals("jwt_tokens", customPatterns.get(0).getName());
+        assertEquals("eyJ[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+", customPatterns.get(0).getRegex());
+
+        // CLI pattern added with correct name (size was 1 when added)
+        assertEquals("cli_pattern_1", customPatterns.get(1).getName());
+        assertEquals("\\b[A-Z]{3}-\\d{6}\\b", customPatterns.get(1).getRegex());
+    }
 }

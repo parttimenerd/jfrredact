@@ -565,9 +565,7 @@ general:
 #   java -jar jfr-redact.jar input.jfr output.jfr --pseudonymize --pseudonym-format hash
 #
 # Test without creating output:
-#   java -jar jfr-redact.jar input.jfr output.jfr --config my-config.yaml --dry-run --verbose```bash
-mvn package -DskipTests -Pgenerate-schema
-```
+#   java -jar jfr-redact.jar input.jfr output.jfr --config my-config.yaml --dry-run --verbose```
 
 The schema generation is:
 - **Automatic in CI**: Generated during package phase in GitHub Actions CI/CD

@@ -133,6 +133,15 @@ public class RedactionEngine {
                 patternCache.put("home_" + i, Pattern.compile(regex));
             }
         }
+
+        // Custom patterns
+        for (int i = 0; i < patterns.getCustom().size(); i++) {
+            var customPattern = patterns.getCustom().get(i);
+            if (customPattern.getRegex() != null && !customPattern.getRegex().isEmpty()) {
+                String key = customPattern.getName() != null ? customPattern.getName() : "custom_" + i;
+                patternCache.put(key, Pattern.compile(customPattern.getRegex()));
+            }
+        }
     }
 
     /**
@@ -415,6 +424,17 @@ public class RedactionEngine {
                 Matcher matcher = entry.getValue().matcher(result);
                 if (matcher.find()) {
                     result = replaceMatches(matcher, result, "home_directory");
+                }
+            }
+        }
+
+        // Check custom patterns (including CLI-added patterns)
+        for (Map.Entry<String, Pattern> entry : patternCache.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith("custom_") || key.startsWith("cli_pattern_")) {
+                Matcher matcher = entry.getValue().matcher(result);
+                if (matcher.find()) {
+                    result = replaceMatches(matcher, result, key);
                 }
             }
         }
