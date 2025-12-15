@@ -1,6 +1,8 @@
 jfr-redact
 ==========
 
+[![CI](https://github.com/parttimenerd/jfr-redact/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/jfr-redact/actions/workflows/ci.yml)
+
 __This is an early prototype of the SapMachine team, use at your own risk.__
 __We don't provide any guarantees regarding functionality.__
 
@@ -71,7 +73,7 @@ This tool requires Java 21 or higher.
 
 ### As a Command-Line Tool
 
-Download the standalone JAR from the [releases page](https://github.com/parttimenerd/jfrredact/releases).
+Download the standalone JAR from the [releases page](https://github.com/parttimenerd/jfr-redact/releases).
 
 ### Using JBang
 
@@ -851,7 +853,7 @@ To skip the hook temporarily: `git commit --no-verify`
 
 To release a new version to Maven Central:
 
-1. Update the version in `src/main/java/me/bechberger/jfrredact/Version.java`
+1. Update the version in `src/main/java/me/bechberger/jfr-redact/Version.java`
 2. Run `./bin/sync-documentation.py` to sync version to `pom.xml`
 3. Commit the changes
 4. Create and push a tag: `git tag v<version> && git push origin v<version>`
@@ -865,7 +867,7 @@ The project automatically generates a JSON Schema (`config-schema.json`) during 
 
 **Getting the Schema:**
 - Build locally: `mvn package && java -jar target/jfr-redact.jar generate-schema config-schema.json`
-- Download from CI: Check the [Actions tab](https://github.com/parttimenerd/jfrredact/actions) and download the `config-schema` artifact from recent builds
+- Download from CI: Check the [Actions tab](https://github.com/parttimenerd/jfr-redact/actions) and download the `config-schema` artifact from recent builds
 
 **VS Code**: The schema reference is already included in config files:
 ```yaml
