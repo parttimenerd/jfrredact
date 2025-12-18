@@ -1,11 +1,9 @@
 package me.bechberger.jfrredact.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import me.bechberger.jfrredact.util.RegexCache;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
@@ -26,6 +24,8 @@ public class PropertyConfig {
 
     @JsonProperty("case_sensitive")
     private boolean caseSensitive = false;
+
+    private final RegexCache regexCache = new RegexCache();
 
     /**
      * If true, patterns must match the entire field name.
@@ -81,10 +81,10 @@ public class PropertyConfig {
                 Pattern pattern;
                 if (fullMatch) {
                     // Exact match required - anchor the pattern
-                    pattern = Pattern.compile("^" + patternStr + "$", flags);
+                    pattern = regexCache.getPattern("^" + patternStr + "$", flags);
                 } else {
                     // Partial match (default) - pattern can match anywhere
-                    pattern = Pattern.compile(patternStr, flags);
+                    pattern = regexCache.getPattern(patternStr, flags);
                 }
 
                 if (pattern.matcher(key).find()) {

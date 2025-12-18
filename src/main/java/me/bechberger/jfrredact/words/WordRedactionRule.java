@@ -1,38 +1,51 @@
 package me.bechberger.jfrredact.words;
 import java.util.regex.Pattern;
+
 public class WordRedactionRule {
     public enum RuleType {
         REDACT, KEEP, REPLACE, REDACT_PREFIX
     }
+
     private final RuleType type;
     private final String pattern;
     private final String replacement;
     private final boolean isRegex;
+    private final Pattern compiledPattern; // Cache compiled pattern
+
     public WordRedactionRule(RuleType type, String pattern, String replacement, boolean isRegex) {
         this.type = type;
         this.pattern = pattern;
         this.replacement = replacement;
         this.isRegex = isRegex;
+        // Compile pattern once during construction if it's a regex
+        this.compiledPattern = isRegex ? Pattern.compile(pattern) : null;
     }
+
     public static WordRedactionRule redact(String pattern, boolean isRegex) {
         return new WordRedactionRule(RuleType.REDACT, pattern, null, isRegex);
     }
+
     public static WordRedactionRule keep(String pattern, boolean isRegex) {
         return new WordRedactionRule(RuleType.KEEP, pattern, null, isRegex);
     }
+
     public static WordRedactionRule replace(String pattern, String replacement, boolean isRegex) {
         return new WordRedactionRule(RuleType.REPLACE, pattern, replacement, isRegex);
     }
+
     public static WordRedactionRule redactPrefix(String prefix) {
         return new WordRedactionRule(RuleType.REDACT_PREFIX, prefix, null, false);
     }
+
     public RuleType getType() { return type; }
     public String getPattern() { return pattern; }
     public String getReplacement() { return replacement; }
     public boolean isRegex() { return isRegex; }
+
     public boolean matches(String word) {
         if (isRegex) {
-            return Pattern.compile(pattern).matcher(word).matches();
+            // Use cached compiled pattern
+            return compiledPattern.matcher(word).matches();
         } else if (type == RuleType.REDACT_PREFIX) {
             return word.startsWith(pattern);
         } else {

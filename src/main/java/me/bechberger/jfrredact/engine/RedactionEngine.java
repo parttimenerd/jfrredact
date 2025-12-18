@@ -6,6 +6,7 @@ import me.bechberger.jfrredact.config.EventConfig;
 import me.bechberger.jfrredact.config.RedactionConfig;
 import me.bechberger.jfrredact.pseudonimyzer.Pseudonymizer;
 import me.bechberger.jfrredact.util.GlobMatcher;
+import me.bechberger.jfrredact.util.RegexCache;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1021,22 +1022,28 @@ public class RedactionEngine {
         // Sort by value length (longest first) to avoid partial replacements
         values.sort((a, b) -> Integer.compare(b.getValue().length(), a.getValue().length()));
 
+        int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE;
+
         for (DiscoveredPatterns.DiscoveredValue discovered : values) {
             String toFind = discovered.getValue();
 
-            // Use Pattern.quote to treat the discovered value as literal string
-            // Use CASE_INSENSITIVE flag if needed
-            int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE;
-            Pattern pattern = Pattern.compile(Pattern.quote(toFind), flags);
+            boolean found = caseSensitive
+                ? result.contains(toFind)
+                : result.toLowerCase().contains(toFind.toLowerCase());
 
-            Matcher matcher = pattern.matcher(result);
-            if (matcher.find()) {
+            if (found) {
                 // Replace all occurrences
                 String replacement = pseudonymizer.isEnabled()
                     ? pseudonymizer.pseudonymize(toFind, config.getGeneral().getRedactionText())
                     : config.getGeneral().getRedactionText();
 
-                result = matcher.replaceAll(Matcher.quoteReplacement(replacement));
+                // Use case-sensitive or case-insensitive replacement
+                if (caseSensitive) {
+                    result = result.replace(toFind, replacement);
+                } else {
+                    // Case-insensitive replacement - need to find and replace all occurrences
+                    result = replaceCaseInsensitive(result, toFind, replacement);
+                }
 
                 logger.trace("Redacted discovered {} value '{}' in text",
                            discovered.getType(), toFind);
@@ -1044,5 +1051,27 @@ public class RedactionEngine {
         }
 
         return result;
+    }
+
+    /**
+     * Replace all occurrences of toFind in text with replacement, case-insensitively.
+     */
+    private String replaceCaseInsensitive(String text, String toFind, String replacement) {
+        if (toFind.isEmpty()) return text;
+
+        String lowerText = text.toLowerCase();
+        String lowerToFind = toFind.toLowerCase();
+        StringBuilder result = new StringBuilder();
+        int lastIndex = 0;
+        int index;
+
+        while ((index = lowerText.indexOf(lowerToFind, lastIndex)) != -1) {
+            result.append(text, lastIndex, index);
+            result.append(replacement);
+            lastIndex = index + toFind.length();
+        }
+        result.append(text.substring(lastIndex));
+
+        return result.toString();
     }
 }
