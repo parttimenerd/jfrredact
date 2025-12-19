@@ -10,7 +10,7 @@
 
 
     <name>jfrredact</name>
-    <url>https://github.com/parttimenerd/jfrredact</url>
+    <url>https://github.com/parttimenerd/jfr-redact</url>
 
     <licenses>
         <license>
@@ -28,9 +28,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git@github.com:parttimenerd/jfrredact.git</connection>
-        <developerConnection>scm:git:https://github.com/parttimenerd/jfrredact.git</developerConnection>
-        <url>https://github.com/parttimenerd/jfrredact</url>
+        <connection>scm:git:git@github.com:parttimenerd/jfr-redact.git</connection>
+        <developerConnection>scm:git:https://github.com/parttimenerd/jfr-redact.git</developerConnection>
+        <url>https://github.com/parttimenerd/jfr-redact</url>
     </scm>
 
     <distributionManagement>
