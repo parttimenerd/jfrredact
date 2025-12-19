@@ -357,7 +357,8 @@ Usage: jfr-redact redact-text [-hqvV] [--debug] [--pseudonymize] [--stats]
                               [--pseudonymize-mode=<mode>] [--seed=<seed>]
                               [--add-redaction-regex=<pattern>]... <input-file>
                               [<output-file>]
-Redact sensitive information from text files (logs, configuration files, etc.)
+Redact sensitive information from text files, especially hserr files, but also
+logs, configuration files, etc.
       <input-file>          Input text file to redact
       [<output-file>]       Output file with redacted data (default: <input>.
                               redacted.<ext>)
@@ -369,7 +370,7 @@ Redact sensitive information from text files (logs, configuration files, etc.)
       --debug               Enable debug output (DEBUG level logging)
   -h, --help                Show this help message and exit.
       --preset=<preset>     Use a predefined configuration preset. Valid
-                              values: default, strict, hserr (default: default)
+                              values: default, strict, hserr (default: hserr)
       --pseudonymize        Enable pseudonymization mode. When enabled, the
                               same sensitive value always maps to the same
                               pseudonym (e.g., &lt;redacted:a1b2c3&gt;),
@@ -396,7 +397,7 @@ Examples:
     (creates application.redacted.log)
 
   Use hserr preset for Java crash reports:
-    jfr-redact redact-text hs_err_pid12345.log --preset hserr
+    jfr-redact redact-text hs_err_pid12345.log
 
   Read from stdin, write to stdout:
     cat hs_err_pid12345.log | jfr-redact redact-text - -
@@ -660,26 +661,119 @@ Examples:
 
 </details>
 
-## Configuration
+Configuration
+-------------
 
-A customizable template is available at [config-template.yaml](config-template.yaml).
-
-**Configuration Inheritance:**
-
-Configuration File Format
--------------------------
-- Preset names: `default`, `strict`
+- Preset names: [`default`](src/main/resources/presets/default.yaml), [`strict`](src/main/resources/presets/strict.yaml), [`hserr`](src/main/resources/presets/hserr.yaml)
 - File paths: `./my-parent-config.yaml`, `/absolute/path/to/config.yaml`
 - URLs: `https://example.com/configs/base.yaml`, `file:///path/to/config.yaml`
 
-<details><summary>Example with URL parent</summary>
+<details><summary>A customizable template is available at config-template.yaml</summary>
 
+<!-- BEGIN config_template -->
 ```yaml
 # Save as: my-config.yaml
 
 # You can base your configuration on a preset and override specific options
 # Or build from scratch by commenting out the parent line
 #   parent: default
+
+# ============================================================================
+# Pattern Discovery - Automatically discover and redact sensitive values
+# ============================================================================
+# Discovery mode controls HOW discovery is performed (globally)
+# Per-pattern settings (min_occurrences, case_sensitive, whitelist) are configured
+# individually for each pattern type under strings.patterns
+discovery:
+  mode: default  # Options: none, fast, default (two-pass)
+
+  # Property-based extraction - discover values from JFR event properties
+  # Extracts values based on property key names (e.g., "user.name" -> extract username)
+  # Supports two modes:
+  #   1. Direct field matching: event.userName = "john" (matches field name "userName")
+  #   2. Key-value pair matching: event.key = "user.name", event.value = "john"
+  property_extractions:
+  # Example: Extract usernames from properties like user.name, username, etc.
+  # - name: "user_name_property"
+  #   description: "Extract usernames from JFR event properties"
+  #   key_pattern: "(?i)(user\\.name|username|user_name|user)"  # Regex to match property key
+  #   key_property_pattern: "key"          # Property name for key in key-value pairs (default: "key")
+  #   value_pattern: ".*"                  # Regex to match value content (default: ".*")
+  #   value_property_pattern: "value"      # Property name for value in key-value pairs (default: "value")
+  #   event_type_filter: ".*"              # Optional: only process specific event types (regex)
+  #   type: USERNAME                       # USERNAME, HOSTNAME, EMAIL_LOCAL_PART, or CUSTOM
+  #   case_sensitive: false                # Case sensitivity for discovered values
+  #   min_occurrences: 1                   # Minimum occurrences to redact
+  #   enabled: true
+
+  # Example with custom key-value property names:
+  # - name: "config_hostname"
+  #   key_pattern: "server\\.host"
+  #   key_property_pattern: "configKey"    # Custom property name for key
+  #   value_property_pattern: "configValue"  # Custom property name for value
+  #   type: HOSTNAME
+
+  # Example with value pattern filtering:
+  # - name: "corporate_emails"
+  #   key_pattern: ".*email.*"
+  #   value_pattern: ".*@company\\.com"    # Only extract @company.com emails
+  #   type: EMAIL_LOCAL_PART
+
+  # Note: Whitelists are handled by discovery_whitelist in strings.patterns
+  # The property extractor respects the same whitelist as the pattern type
+
+  # Custom extraction patterns - define your own patterns to discover
+  # These are independent from strings.patterns and can extract any type of value
+  custom_extractions:
+
+  # Example 1: Extract usernames from SSH connection strings
+  # - name: "ssh_usernames"
+  #   description: "Extract usernames from SSH commands like 'user@hostname'"
+  #   pattern: '([a-zA-Z0-9_-]+)@[a-zA-Z0-9.-]+'  # Captures username before @
+  #   capture_group: 1         # Extract group 1 (the username)
+  #   type: USERNAME           # Categorize as USERNAME (options: USERNAME, HOSTNAME, EMAIL_LOCAL_PART, CUSTOM)
+  #   case_sensitive: false    # Treat "Alice", "alice", "ALICE" as same
+  #   min_occurrences: 2       # Only redact if appears 2+ times
+  #   whitelist:               # Never redact these usernames
+  #     - root
+  #     - admin
+  #     - git
+  #   enabled: true
+
+  # Example 2: Extract build usernames from build logs
+  # - name: "build_user"
+  #   description: "Username from build info"
+  #   pattern: 'built on .* by "([^"]+)"'
+  #   capture_group: 1
+  #   type: USERNAME
+  #   case_sensitive: false
+  #   min_occurrences: 1
+  #   whitelist:
+  #     - jenkins
+  #   enabled: true
+
+  # Example 3: Extract hostnames from URLs
+  # - name: "url_hostnames"
+  #   description: "Extract hostnames from HTTP/HTTPS URLs"
+  #   pattern: 'https?://([a-zA-Z0-9.-]+)/'
+  #   capture_group: 1
+  #   type: HOSTNAME
+  #   case_sensitive: false
+  #   min_occurrences: 1
+  #   whitelist:
+  #     - localhost
+  #     - example.com
+  #   enabled: true
+
+  # Example 4: Extract project codes (custom type)
+  # - name: "project_codes"
+  #   description: "Extract project identifiers like PROJ-ABC123"
+  #   pattern: 'PROJ-([A-Z0-9]+)'
+  #   capture_group: 1
+  #   type: CUSTOM           # Will be categorized as custom
+  #   case_sensitive: true   # Project codes are case-sensitive
+  #   min_occurrences: 1
+  #   enabled: true
 
 # Property redaction - matches patterns in field names
 properties:
@@ -766,18 +860,53 @@ strings:
   redact_in_thread_names: false
 
   patterns:
-    # Home directory paths
+    # Home directory paths - discovers usernames from paths
     home_directories:
       enabled: true
-      regexes:
-        - '/Users/[^/]+'                    # macOS: /Users/username
-        - 'C:\\Users\\[a-zA-Z0-9_\-]+'     # Windows: C:\Users\username
+
+      # === Discovery Settings (per-pattern) ===
+
+      # Enable pattern discovery: Extract usernames and redact them everywhere
+      # If false, only the full path is redacted (e.g., "/Users/alice" redacted, but not standalone "alice")
+      # If true, extracts "alice" and redacts it everywhere in the file
+      discovery:
+        enabled: true
+
+        # Which regex capture group contains the value to extract (1 = first group)
+        capture_group: 1
+
+        # Minimum occurrences before a discovered value is redacted (prevents false positives)
+        # Only values appearing at least this many times will be redacted
+        min_occurrences: 1
+
+        # Case sensitivity for discovered value matching
+        # If false, "Alice", "alice", and "ALICE" are treated as the same value
+        case_sensitive: false
+
+        # Whitelist of values that should NEVER be discovered/redacted by this pattern
+        # Useful for common/generic usernames
+        whitelist:
+          - root
+          - admin
+          - test
+          - user
+          - guest
+          - system
+          # Add pattern-specific safe values:
+          # - jenkins
+          # - builduser
+
+      # Regex patterns for matching (with capture groups for extraction)
+      patterns:
+        - '/Users/([^/]+)'                    # macOS: /Users/username (group 1 = username)
+        - 'C:\\Users\\([a-zA-Z0-9_\-]+)'     # Windows: C:\Users\username (group 1 = username)
         - '/home/[^/]+'                     # Linux: /home/username
 
     # Email addresses
     emails:
       enabled: true
-      regex: '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+      patterns:
+        - '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 
     # UUIDs (often used as identifiers)
     uuids:
@@ -787,8 +916,9 @@ strings:
     # IP addresses
     ip_addresses:
       enabled: true
-      ipv4: '\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
-      ipv6: '\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'
+      patterns:
+        - '\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+        - '\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'
 
     # SSH host patterns - redact hostnames in SSH connection strings
     # Matches: user@hostname, ssh://hostname, hostname:port
@@ -802,13 +932,35 @@ strings:
 
     # Custom patterns - add your own regex patterns here
     custom:
-    # Example: AWS access keys
+    # Example: AWS access keys (no discovery - just redact the pattern itself)
     # - name: aws_access_keys
-    #   regex: 'AKIA[0-9A-Z]{16}'
+    #   patterns:
+    #     - 'AKIA[0-9A-Z]{16}'
+    #   discovery:
+    #     enabled: false  # Only redact "AKIA..." keys, don't extract parts
 
-    # Example: JWT tokens
+    # Example: Build IDs with discovery
+    # - name: build_ids
+    #   patterns:
+    #     - 'build-([A-Z0-9]+)-\d+'  # e.g., build-ABC123-001
+    #   discovery:
+    #     enabled: true           # Extract "ABC123" and redact everywhere
+    #     capture_group: 1        # Group 1 = the build code
+    #
+    #   # Optional: ignore certain values
+    #   ignore_exact:
+    #     - JENKINS  # Don't redact if the build code is "JENKINS"
+    #
+    #   # Optional: ignore patterns
+    #   ignore:
+    #     - 'TEST.*'  # Don't redact build codes starting with TEST
+
+    # Example: JWT tokens (no discovery - just redact full tokens)
     # - name: jwt_tokens
-    #   regex: 'eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+'
+    #   patterns:
+    #     - 'eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+'
+    #   discovery:
+    #     enabled: false
 
 # Network event redaction - redact addresses/ports in socket events
 network:
@@ -1004,6 +1156,8 @@ general:
 # Test without creating output:
 #   java -jar jfr-redact.jar input.jfr output.jfr --config my-config.yaml --dry-run --verbose
 ```
+</details>
+<!-- END config_template -->
 
 Development
 -----------
